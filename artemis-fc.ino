@@ -62,12 +62,12 @@ void loop() {
         int rtemp = (float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1))/1600*180;
         rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
 	rtemp2 = rtemp1;
-	retemp1 = retemp;
+	rtemp1 = rtemp;
         
         int etemp = (float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3))/1600*180;
         elevator.write((int)(etemp + etemp1 + etemp2)/3);
 	etemp2 = etemp1;
-	etemp1 = etemps;
+	etemp1 = etemp;
 
         int mtemp = (float)(((dat[5] & 0x0F) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6))/1600*180;
         motor.write(255-mtemp);
