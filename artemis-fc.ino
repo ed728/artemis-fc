@@ -26,9 +26,12 @@ int rtemp2 = 0;
 int etemp1 = 0;
 int etemp2 = 0;
 
+int cnt = 0;
+
 void setup() {
   // put your setup code here, to run once:
   sbus.begin(100000);
+  Serial.begin(115200);
   Wire.begin();
   delay(2000);
   mpu.setup();
@@ -42,37 +45,42 @@ void loop() {
   int dat[25];
   int d = sbus.read();
   int index = 0;
-  
+ 
   while(d != -1){
     if(index < 25) dat[index] = d;
     index ++;
     d = sbus.read();
   }
-  if(dat[9] & 0x02 > 0){
-    // センサーデータを取る
-    mpu.update();
-    int tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,P_yaw,I_yaw,D_yaw);
-    int tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,P_pitch,I_pitch,D_pitch);
-    rudder.write(tau_roll+90);
-    elevator.write(tau_pitch+90);
-  }
-  else{
-    if(index > 10){
-      if(dat[0] == 240){
-        int rtemp = (float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1))/1600*180;
-        rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
-	rtemp2 = rtemp1;
-	rtemp1 = rtemp;
-        
-        int etemp = (float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3))/1600*180;
-        elevator.write((int)(etemp + etemp1 + etemp2)/3);
-	etemp2 = etemp1;
-	etemp1 = etemp;
-
-        int mtemp = (float)(((dat[5] & 0x0F) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6))/1600*180;
-        motor.write(255-mtemp);
-      }
+  if(dat[0] == 240){
+    if(dat[9] & 0x02 > 0){
+      // センサーデータを取る
+      mpu.update();
+      int tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,P_yaw,I_yaw,D_yaw);
+      int tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,P_pitch,I_pitch,D_pitch);
+      rudder.write(tau_roll+90);
+      elevator.write(tau_pitch+90);
+      Serial.println(tau_roll+90);
+      
     }
+    else{
+      if(index > 10){
+          int rtemp = (float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1))/1600*180;
+          rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
+
+          
+          Serial.println(rtemp);
+  	rtemp2 = rtemp1;
+  	rtemp1 = rtemp;
+          
+          int etemp = (float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3))/1600*180;
+          elevator.write((int)(etemp + etemp1 + etemp2)/3);
+  	etemp2 = etemp1;
+  	etemp1 = etemp;
+  
+          int mtemp = (float)(((dat[5] & 0x0F) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6))/1600*180;
+          motor.write(255-mtemp);
+        }
+      }
   }
 }
 
