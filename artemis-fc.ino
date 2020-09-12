@@ -59,17 +59,17 @@ void loop() {
   else{
     if(index > 10){
       if(dat[0] == 240){
-        int rtemp = ((dat[6] & 0x0F) << 4)+((dat[5] & 0xF0) >> 4);
+        int rtemp = (float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1))/1600*180;
         rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
 	rtemp2 = rtemp1;
 	retemp1 = retemp;
         
-        int etemp = ((dat[3] & 0x3F)<< 2)+((dat[2] & 0xC0) >> 6);
+        int etemp = (float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3))/1600*180;
         elevator.write((int)(etemp + etemp1 + etemp2)/3);
 	etemp2 = etemp1;
 	etemp1 = etemps;
 
-        int mtemp = ((dat[5] & 0x01) << 7)+((dat[4] & 0xFE) >> 1);
+        int mtemp = (float)(((dat[5] & 0x0F) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6))/1600*180;
         motor.write(255-mtemp);
       }
     }
