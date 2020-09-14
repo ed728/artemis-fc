@@ -8,12 +8,12 @@ Servo motor;
 Servo rudder;
 Servo elevator;
 
-int P_yaw = 2;
-int I_yaw = 0;
-int D_yaw = 0;
-int P_pitch = -4;
-int I_pitch = 0;
-int D_pitch = 0;
+float P_yaw = 0.3;
+float I_yaw = 0;
+float D_yaw = 0;
+float P_pitch = -1;
+float I_pitch = 0;
+float D_pitch = 0;
 
 int roll_sum = 0; //overflowに注意
 int roll_before = 0;
@@ -28,8 +28,15 @@ int etemp2 = 0;
 
 int cnt = 0;
 
+float pitchZero = 0;
+float rollZero = 0;
+
 void setup() {
   // put your setup code here, to run once:
+  pinMode(PIN_LED1,OUTPUT);
+  pinMode(PIN_LED2,OUTPUT);
+  digitalWrite(PIN_LED2,HIGH);
+
   sbus.begin(100000);
   Serial.begin(115200);
   Wire.begin();
@@ -38,7 +45,21 @@ void setup() {
   motor.attach(A1);
   rudder.attach(A2);
   elevator.attach(A3);
-  pinMode(PIN_LED1,OUTPUT);
+  mpu.calibrateAccelGyro();
+
+  float pitchSum = 0;
+  float rollSum = 0;
+  const int repetition = 100;
+  for(int i = 0; i< repetition; i++){
+    mpu.update();
+    pitchSum += mpu.getPitch();
+    rollSum += mpu.getRoll();
+  }
+
+  pitchZero = pitchSum /repetition;
+  rollZero = rollSum / repetition;
+
+  digitalWrite(PIN_LED2,LOW);
 }
 
 void loop() {
@@ -57,42 +78,39 @@ void loop() {
       // センサーデータを取る
       digitalWrite(PIN_LED1,HIGH);
       mpu.update();
-      int tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,P_yaw,I_yaw,D_yaw);
-      int tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,P_pitch,I_pitch,D_pitch);
+      int tau_roll = PIDcontrol(mpu.getRoll(),rollZero,0,&roll_before,P_yaw,I_yaw,D_yaw);
+      int tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,P_pitch,I_pitch,D_pitch);
       rudder.write(tau_roll+90);
       elevator.write(tau_pitch+90);
-      Serial.println(tau_roll+90);
-      
     }
     else{
       digitalWrite(PIN_LED1,LOW);
       if(index > 10){
           int rtemp = (float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1))/1600*180;
           rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
-
-          
-          Serial.println(rtemp);
-  	rtemp2 = rtemp1;
-  	rtemp1 = rtemp;
+          rtemp2 = rtemp1;
+          rtemp1 = rtemp;
           
           int etemp = (float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3))/1600*180;
           elevator.write((int)(etemp + etemp1 + etemp2)/3);
-  	etemp2 = etemp1;
-  	etemp1 = etemp;
+        	etemp2 = etemp1;
+  	      etemp1 = etemp;
   
           int mtemp = (float)(((dat[5] & 0x0F) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6))/1600*180;
-          motor.write(255-mtemp);
+          motor.write(180-mtemp);
         }
       }
   }
 }
 
-int PIDcontrol(int current, int target, int *before, int P, int I, int D){
+// argument "current" should be the raw data from the sensor (therefore biased by the value set at calibration) and argument "target" should not be biased (therefore the argument should be 0 when completely horizontal). The return value is also biased.
+int PIDcontrol(float current, float zero, int target, int *before, float P, float I, float D){
+  current -= zero;
   int error = current - target;
   //sum += error;
   int dif = error-*before;
   *before = error;
-  return P*error+D*dif; //+I*sum
+  return (P*error+D*dif) + zero; //+I*sum
 }
 int P2control(int current_theta, int target_theta,int current_omega, int target_omega, int P_theta, int P_omega){
   int error_theta = current_theta - target_theta;
