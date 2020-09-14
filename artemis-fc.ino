@@ -38,6 +38,7 @@ void setup() {
   motor.attach(A1);
   rudder.attach(A2);
   elevator.attach(A3);
+  pinMode(PIN_LED1,OUTPUT);
 }
 
 void loop() {
@@ -54,6 +55,7 @@ void loop() {
   if(dat[0] == 240){
     if(dat[9] & 0x02 > 0){
       // センサーデータを取る
+      digitalWrite(PIN_LED1,HIGH);
       mpu.update();
       int tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,P_yaw,I_yaw,D_yaw);
       int tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,P_pitch,I_pitch,D_pitch);
@@ -63,6 +65,7 @@ void loop() {
       
     }
     else{
+      digitalWrite(PIN_LED1,LOW);
       if(index > 10){
           int rtemp = (float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1))/1600*180;
           rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
