@@ -86,18 +86,18 @@ void loop() {
     else{
       digitalWrite(PIN_LED1,LOW);
       if(index > 10){
-          int rtemp = (float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1))/1600*180;
+          int rtemp = 180-((float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1)-192)/1600*180);
           rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
           rtemp2 = rtemp1;
           rtemp1 = rtemp;
           
-          int etemp = (float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3))/1600*180;
+          int etemp = (float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3)-192)/1600*180;
           elevator.write((int)(etemp + etemp1 + etemp2)/3);
         	etemp2 = etemp1;
   	      etemp1 = etemp;
   
-          int mtemp = (float)(((dat[5] & 0x0F) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6))/1600*180;
-          motor.write(180-mtemp);
+          int mtemp = 180-((float)(((dat[5] & 0x01) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6)-192)/1600*180);
+          motor.write(mtemp);
         }
       }
   }
