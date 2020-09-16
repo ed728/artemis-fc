@@ -8,7 +8,7 @@ Servo motor;
 Servo rudder;
 Servo elevator;
 
-float P_yaw = 0.3;
+float P_yaw = 1;
 float I_yaw = 0;
 float D_yaw = 0;
 float P_pitch = -1;
@@ -45,11 +45,10 @@ void setup() {
   motor.attach(A1);
   rudder.attach(A2);
   elevator.attach(A3);
-  mpu.calibrateAccelGyro();
-
   float pitchSum = 0;
   float rollSum = 0;
   const int repetition = 100;
+  
   for(int i = 0; i< repetition; i++){
     mpu.update();
     pitchSum += mpu.getPitch();
@@ -75,9 +74,9 @@ void loop() {
   }
   if(dat[0] == 240){
     if(dat[9] & 0x02 > 0){
+      mpu.update();
       // センサーデータを取る
       digitalWrite(PIN_LED1,HIGH);
-      mpu.update();
       int tau_roll = PIDcontrol(mpu.getRoll(),rollZero,0,&roll_before,P_yaw,I_yaw,D_yaw);
       int tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,P_pitch,I_pitch,D_pitch);
       rudder.write(tau_roll+90);
@@ -106,7 +105,7 @@ void loop() {
 // argument "current" should be the raw data from the sensor (therefore biased by the value set at calibration) and argument "target" should not be biased (therefore the argument should be 0 when completely horizontal). The return value is also biased.
 int PIDcontrol(float current, float zero, int target, int *before, float P, float I, float D){
   current -= zero;
-  int error = current - target;
+  float error = current - target;
   //sum += error;
   int dif = error-*before;
   *before = error;
