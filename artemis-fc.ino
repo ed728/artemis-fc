@@ -77,8 +77,14 @@ void loop() {
       mpu.update();
       // センサーデータを取る
       digitalWrite(PIN_LED1,HIGH);
-      int tau_roll = PIDcontrol(mpu.getRoll(),rollZero,0,&roll_before,P_yaw,I_yaw,D_yaw);
-      int tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,P_pitch,I_pitch,D_pitch);
+      int target_roll = 0;
+      int target_pitch = 0;
+      if(dat[10] & 0x10 > 0) target_roll = 15;
+      else if(dat[11] & 0x80 > 0) target_roll = -15;
+      if(dat[14]&0x20 > 0) target_pitch = 10;
+
+      int tau_roll = PIDcontrol(mpu.getRoll(),rollZero,target_roll,&roll_before,P_yaw,I_yaw,D_yaw);
+      int tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,target_pitch,&pitch_before,P_pitch,I_pitch,D_pitch);
       rudder.write(tau_roll+90);
       elevator.write(tau_pitch+90);
     }
@@ -90,7 +96,7 @@ void loop() {
           rtemp2 = rtemp1;
           rtemp1 = rtemp;
           
-          int etemp = (float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3)-192)/1600*180;
+          int etemp = 180-(float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3)-192)/1600*180;
           elevator.write((int)(etemp + etemp1 + etemp2)/3);
         	etemp2 = etemp1;
   	      etemp1 = etemp;
