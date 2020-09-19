@@ -28,7 +28,7 @@ float rollZero = 0;
 float eight_start_yaw = 0;
 float climb_start_yaw = 0;
 float climb_start_alt = 0;
-enum State {BEFORE_START, FIRST_TURN, CLIMB, SECOND_TURN, DONE };
+enum State {BEFORE_START, STARTED, FIRST_TURN, CLIMB, SECOND_TURN, DONE };
 enum State eight_state = BEFORE_START;
 enum State climb_state = BEFORE_START;
 
@@ -90,9 +90,14 @@ void loop() {
         switch (eight_state)
         {
         case BEFORE_START:
-          eight_state = FIRST_TURN;
+          eight_state = STARTED;
           eight_start_yaw = mpu.getYaw();
           break;
+        case STARTED:
+          tau_roll = PIDcontrol(mpu.getRoll(),rollZero,15,&roll_before,1,0,0);
+          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
+          float remain = mpu.getYaw() - eight_start_yaw;
+          if(-5 > remain || remain > 5) eight_state = FIRST_TURN;
         case FIRST_TURN:
           tau_roll = PIDcontrol(mpu.getRoll(),rollZero,15,&roll_before,1,0,0);
           tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
@@ -117,9 +122,14 @@ void loop() {
         switch (climb_state)
         {
         case BEFORE_START:
-          climb_state = FIRST_TURN;
+          climb_state = STARTED;
           climb_start_yaw = mpu.getYaw();
           climb_start_alt = echo();
+          break;
+        case STARTED:
+          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
+          float remain = mpu.getYaw() - start_yaw;
+          if(-5 > remain || remain > 5) climb_state = FIRST_TURN;
           break;
         case FIRST_TURN:
           tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
@@ -143,6 +153,7 @@ void loop() {
     else{ //手動操縦モード
       digitalWrite(15,LOW);
       eight_state = BEFORE_START;
+      climb_state = BEFORE_START;
       if(index > 10){
           int rtemp = 180-((float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1)-192)/1600*180);
           rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
