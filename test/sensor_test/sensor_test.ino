@@ -15,11 +15,13 @@ void setup()
 
     // calibrate anytime you want to
     mpu.calibrateAccelGyro();
-    mpu.calibrateMag();
+    //mpu.calibrateMag();
 
     mpu.printCalibration();
 }
 
 void loop()
 {
+  mpu.update();
+  Serial.println(mpu.getPitch());
 }

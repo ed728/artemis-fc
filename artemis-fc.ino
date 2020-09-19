@@ -20,10 +20,6 @@ int rtemp2 = 0;
 int etemp1 = 0;
 int etemp2 = 0;
 
-// variables for 9-axis sensor calibration
-float pitchZero = 0;
-float rollZero = 0;
-
 // constants for auto flight
 float eight_start_yaw = 0;
 float climb_start_yaw = 0;
@@ -31,6 +27,9 @@ float climb_start_alt = 0;
 enum State {BEFORE_START, STARTED, FIRST_TURN, CLIMB, SECOND_TURN, DONE };
 enum State eight_state = BEFORE_START;
 enum State climb_state = BEFORE_START;
+enum Missions {TURN, EIGHT_TURN, AUTO_TO, CLIMB_TURN, NONE};
+enum Missions before1 = NONE;
+enum Missions before2 = NONE;
 
 void setup() {
   // put your setup code here, to run once:
@@ -43,22 +42,11 @@ void setup() {
   Wire.begin();
   delay(2000);
   mpu.setup();
+  delay(5000);
+  //mpu.calibrateAccelGyro();
   motor.attach(A1);
   rudder.attach(A2);
   elevator.attach(A3);
-  float pitchSum = 0;
-  float rollSum = 0;
-  const int repetition = 100;
-  
-  for(int i = 0; i< repetition; i++){
-    mpu.update();
-    pitchSum += mpu.getPitch();
-    rollSum += mpu.getRoll();
-  }
-
-  pitchZero = pitchSum /repetition;
-  rollZero = rollSum / repetition;
-
   pinMode(11, OUTPUT); //trigger_pin
   pinMode(7, INPUT); //echo_pin
   
@@ -82,71 +70,124 @@ void loop() {
       digitalWrite(15,HIGH);
       int tau_roll;
       int tau_pitch;
+      enum Missions mission = NONE;
       if(dat[10] & 0x10 > 0){ //CH7（水平旋回）
-        tau_roll = PIDcontrol(mpu.getRoll(),rollZero,15,&roll_before,1,0,0);
-        tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
+        mission = TURN;
       }
-      else if(dat[11] & 0x80 > 0) { //CH8（8の字飛行）
-        switch (eight_state)
-        {
-        case BEFORE_START:
-          eight_state = STARTED;
-          eight_start_yaw = mpu.getYaw();
-          break;
-        case STARTED:
-          tau_roll = PIDcontrol(mpu.getRoll(),rollZero,15,&roll_before,1,0,0);
-          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
-          float remain = mpu.getYaw() - eight_start_yaw;
-          if(-5 > remain || remain > 5) eight_state = FIRST_TURN;
-        case FIRST_TURN:
-          tau_roll = PIDcontrol(mpu.getRoll(),rollZero,15,&roll_before,1,0,0);
-          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
-          float remain = mpu.getYaw() - eight_start_yaw;
-          if(-5 < remain && remain < 5) eight_state = SECOND_TURN;
-          break;
-        case SECOND_TURN:
-          tau_roll = PIDcontrol(mpu.getRoll(),rollZero,-15,&roll_before,1,0,0);
-          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
-          break;
-        default:
-          break;
-        }
+      else if(dat[11] > 220) { //CH8（8の字飛行）
+        mission = EIGHT_TURN;
       }
-      else if(dat[13]&0x04 > 0){ //CH9（自動離陸）
-        motor.write(180);
-        tau_roll = PIDcontrol(mpu.getRoll(),rollZero,0,&roll_before,1,0,0);
-        tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,10,&pitch_before,-1,0,0);
+      else if(false){ //CH9（自動離陸）
+        mission = AUTO_TO;
       }
       else if(dat[14]&0x20 > 0){ //CH10（上昇旋回）
-        tau_roll = PIDcontrol(mpu.getRoll(),rollZero,-15,&roll_before,1,0,0);
-        switch (climb_state)
+        mission = CLIMB_TURN;
+      }
+      else
+      {
+        mission = NONE;
+      }
+      Serial.println(mode(mission,before1,before2));
+      switch (mode(mission,before1,before2)){
+        case TURN:
         {
-        case BEFORE_START:
-          climb_state = STARTED;
-          climb_start_yaw = mpu.getYaw();
-          climb_start_alt = echo();
+          tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,1,0,0);
+          tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
           break;
-        case STARTED:
-          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
-          float remain = mpu.getYaw() - start_yaw;
-          if(-5 > remain || remain > 5) climb_state = FIRST_TURN;
+        }
+        case EIGHT_TURN:
+        {
+          float remain = mpu.getYaw() - eight_start_yaw;
+          switch (eight_state)
+          {
+          case BEFORE_START:
+          {
+            eight_state = STARTED;
+            eight_start_yaw = mpu.getYaw();
+            break;
+          }
+          case STARTED:
+          {
+            tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,1,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
+            if(-5 > remain || remain > 5) eight_state = FIRST_TURN;
+            break;
+          }
+          case FIRST_TURN:
+          {
+            tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,1,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
+            if(-5 < remain && remain < 5) eight_state = SECOND_TURN;
+            break;
+          }
+          case SECOND_TURN:
+          {
+            tau_roll = PIDcontrol(mpu.getRoll(),-15,&roll_before,1,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
+            break;
+          }
+          default:
+            break;
+          }
           break;
-        case FIRST_TURN:
-          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
-          float remain = mpu.getYaw() - start_yaw;
-          if(-5 < remain && remain < 5) climb_state = CLIMB;
+        }
+        case AUTO_TO:
+        {
+          motor.write(180);
+          tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,1,0,0);
+          tau_pitch = PIDcontrol(mpu.getPitch(),10,&pitch_before,-1,0,0);
           break;
-        case CLIMB:
-          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,10,&pitch_before,-1,0,0);
-          if(echo() > climb_start_alt) climb_state = SECOND_TURN;
+        }
+        case CLIMB_TURN:
+        {
+          tau_roll = PIDcontrol(mpu.getRoll(),-15,&roll_before,1,0,0);
+          float remain = mpu.getYaw() - climb_start_yaw;
+          switch (climb_state)
+          {
+          case BEFORE_START:
+          {
+            climb_state = STARTED;
+            climb_start_yaw = mpu.getYaw();
+            climb_start_alt = echo();
+            break;
+          }
+          case STARTED:
+          {
+            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
+            if(-5 > remain || remain > 5) climb_state = FIRST_TURN;
+            break;
+          }
+          case FIRST_TURN:
+          {
+            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
+            if(-5 < remain && remain < 5) climb_state = CLIMB;
+            break;
+          }
+          case CLIMB:
+          {
+            tau_pitch = PIDcontrol(mpu.getPitch(),10,&pitch_before,-1,0,0);
+            if(echo() > climb_start_alt) climb_state = SECOND_TURN;
+            break;
+          }
+          case SECOND_TURN:
+          {
+            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
+            break;
+          }
+          default:
+            break;
+          }
           break;
-        case SECOND_TURN:
-          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,-1,0,0);
-          break;
+        }
         default:
+        {
+          tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,1,0,0);
+          tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
           break;
         }
       }
+      before2 = before1;
+      before1 = mission;
       rudder.write(tau_roll+90);
       elevator.write(tau_pitch+90);
     }
@@ -179,20 +220,24 @@ float echo(){
   delayMicroseconds(10);
   digitalWrite(11, LOW);
 
-  dur = pulseIn(7, HIGH);
-  dist = (dur*0.034)/2.0;
-
-  return dist;
+  long dur = pulseIn(7, HIGH);
+  return (dur*0.034)/2.0;
 }
 
-// argument "current" should be the raw data from the sensor (therefore biased by the value set at calibration) and argument "target" should not be biased (therefore the argument should be 0 when completely horizontal). The return value is also biased.
-int PIDcontrol(float current, float zero, int target, int *before, float P, float I, float D){
-  current -= zero;
+int mode(int a, int b, int c){
+  int true_state = 4;
+  if(a == b) true_state = a;
+  else if(a == c) true_state = a;
+  else true_state = b;
+  return true_state;
+}
+
+int PIDcontrol(float current, int target, int *before, float P, float I, float D){
   float error = current - target;
   //sum += error;
   int dif = error-*before;
   *before = error;
-  return (P*error+D*dif) + zero; //+I*sum
+  return P*error+D*dif; //+I*sum
 }
 int P2control(int current_theta, int target_theta,int current_omega, int target_omega, int P_theta, int P_omega){
   int error_theta = current_theta - target_theta;
