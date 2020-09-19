@@ -34,7 +34,7 @@ enum State climb_state = BEFORE_START;
 
 void setup() {
   // put your setup code here, to run once:
-  pinMode(PIN_LED1,OUTPUT);
+  pinMode(15,OUTPUT);
   pinMode(PIN_LED2,OUTPUT);
   digitalWrite(PIN_LED2,HIGH);
 
@@ -61,7 +61,7 @@ void setup() {
 
   pinMode(11, OUTPUT); //trigger_pin
   pinMode(7, INPUT); //echo_pin
-
+  
   digitalWrite(PIN_LED2,LOW);
 }
 
@@ -79,7 +79,7 @@ void loop() {
   if(dat[0] == 240){
     if(dat[9] & 0x02 > 0){ //自動操縦モード
       mpu.update();
-      digitalWrite(PIN_LED1,HIGH);
+      digitalWrite(15,HIGH);
       int tau_roll;
       int tau_pitch;
       if(dat[10] & 0x10 > 0){ //CH7（水平旋回）
@@ -141,7 +141,7 @@ void loop() {
       elevator.write(tau_pitch+90);
     }
     else{ //手動操縦モード
-      digitalWrite(PIN_LED1,LOW);
+      digitalWrite(15,LOW);
       eight_state = BEFORE_START;
       if(index > 10){
           int rtemp = 180-((float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1)-192)/1600*180);
