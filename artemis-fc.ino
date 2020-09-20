@@ -28,8 +28,8 @@ enum State {BEFORE_START, STARTED, FIRST_TURN, CLIMB, SECOND_TURN, DONE };
 enum State eight_state = BEFORE_START;
 enum State climb_state = BEFORE_START;
 enum Missions {TURN, EIGHT_TURN, AUTO_TO, CLIMB_TURN, NONE};
-enum Missions before1 = NONE;
-enum Missions before2 = NONE;
+enum Missions mission1 = NONE;
+enum Missions mission2 = NONE;
 
 void setup() {
   // put your setup code here, to run once:
@@ -64,7 +64,7 @@ void loop() {
     index ++;
     d = sbus.read();
   }
-  if(dat[0] == 240){
+  if(dat[0] == 240 && dat[8] > 0){
     if(dat[9] & 0x02 > 0){ //自動操縦モード
       mpu.update();
       digitalWrite(15,HIGH);
@@ -87,8 +87,7 @@ void loop() {
       {
         mission = NONE;
       }
-      Serial.println(mode(mission,before1,before2));
-      switch (mode(mission,before1,before2)){
+      switch (mode(mission,mission1,mission2)){
         case TURN:
         {
           tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,1,0,0);
@@ -98,6 +97,7 @@ void loop() {
         case EIGHT_TURN:
         {
           float remain = mpu.getYaw() - eight_start_yaw;
+          Serial.println(eight_state);
           switch (eight_state)
           {
           case BEFORE_START:
@@ -142,6 +142,7 @@ void loop() {
         {
           tau_roll = PIDcontrol(mpu.getRoll(),-15,&roll_before,1,0,0);
           float remain = mpu.getYaw() - climb_start_yaw;
+          Serial.println(climb_state);
           switch (climb_state)
           {
           case BEFORE_START:
@@ -166,7 +167,7 @@ void loop() {
           case CLIMB:
           {
             tau_pitch = PIDcontrol(mpu.getPitch(),10,&pitch_before,-1,0,0);
-            if(echo() > climb_start_alt) climb_state = SECOND_TURN;
+            if(echo() > climb_start_alt + 50) climb_state = SECOND_TURN;
             break;
           }
           case SECOND_TURN:
@@ -186,8 +187,8 @@ void loop() {
           break;
         }
       }
-      before2 = before1;
-      before1 = mission;
+      mission2 = mission1;
+      mission1 = mission;
       rudder.write(tau_roll+90);
       elevator.write(tau_pitch+90);
     }

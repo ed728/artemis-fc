@@ -10,7 +10,7 @@ void setup()
 
     delay(2000);
     mpu.setup();
-
+    
     delay(5000);
 
     // calibrate anytime you want to
