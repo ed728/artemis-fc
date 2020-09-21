@@ -31,6 +31,15 @@ enum Missions {TURN, EIGHT_TURN, AUTO_TO, CLIMB_TURN, NONE};
 enum Missions mission1 = NONE;
 enum Missions mission2 = NONE;
 
+//for BLE
+#include "bluefruit.h"
+
+BLEDis  bledis;
+BLEUart bleuart;
+BLEBas  blebas;
+
+float value;
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(15,OUTPUT);
@@ -49,16 +58,39 @@ void setup() {
   elevator.attach(A3);
   pinMode(11, OUTPUT); //trigger_pin
   pinMode(7, INPUT); //echo_pin
+
+  //Bluefruit.autoConnLed(false);
+  //Bluefruit.setTxPower(-40);
+  Bluefruit.begin();
+  //Bluefruit.setName("Artemis");
+  
+  // Configure and Start Device Information Service
+  //bledis.setManufacturer("Adafruit Industries");
+  //bledis.setModel("Bluefruit Feather52");
+  //bledis.begin();
+
+  // Configure and Start BLE Uart Service
+  //bleuart.begin();
+
+  // Start BLE Battery Service
+  //blebas.begin();
+  //blebas.update(100);
+
+  // Set up Advertising Packet
+  //setupAdv();
+
+  // Start Advertising
+  //Bluefruit.Advertising.start();
   
   digitalWrite(PIN_LED2,LOW);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  sd_softdevice_disable();
   int dat[25];
   int d = sbus.read();
   int index = 0;
- 
   while(d != -1){
     if(index < 25) dat[index] = d;
     index ++;
@@ -90,7 +122,7 @@ void loop() {
       switch (mode(mission,mission1,mission2)){
         case TURN:
         {
-          tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,1,0,0);
+          tau_roll = PIDcontrol(mpu.getRoll(),30,&roll_before,1,0,0);
           tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
           break;
         }
@@ -108,21 +140,21 @@ void loop() {
           }
           case STARTED:
           {
-            tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,1,0,0);
+            tau_roll = PIDcontrol(mpu.getRoll(),30,&roll_before,1,0,0);
             tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
             if(-5 > remain || remain > 5) eight_state = FIRST_TURN;
             break;
           }
           case FIRST_TURN:
           {
-            tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,1,0,0);
+            tau_roll = PIDcontrol(mpu.getRoll(),30,&roll_before,1,0,0);
             tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
             if(-5 < remain && remain < 5) eight_state = SECOND_TURN;
             break;
           }
           case SECOND_TURN:
           {
-            tau_roll = PIDcontrol(mpu.getRoll(),-15,&roll_before,1,0,0);
+            tau_roll = PIDcontrol(mpu.getRoll(),-30,&roll_before,1,0,0);
             tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
             break;
           }
@@ -140,7 +172,7 @@ void loop() {
         }
         case CLIMB_TURN:
         {
-          tau_roll = PIDcontrol(mpu.getRoll(),-15,&roll_before,1,0,0);
+          tau_roll = PIDcontrol(mpu.getRoll(),-30,&roll_before,1,0,0);
           float remain = mpu.getYaw() - climb_start_yaw;
           Serial.println(climb_state);
           switch (climb_state)
@@ -166,7 +198,7 @@ void loop() {
           }
           case CLIMB:
           {
-            tau_pitch = PIDcontrol(mpu.getPitch(),10,&pitch_before,-1,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),-10,&pitch_before,-1,0,0);
             if(echo() > climb_start_alt + 50) climb_state = SECOND_TURN;
             break;
           }
@@ -182,13 +214,14 @@ void loop() {
         }
         default:
         {
-          tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,1,0,0);
-          tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-1,0,0);
+          tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,2,0,0);
+          tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,-3.5,0,0);
           break;
         }
       }
       mission2 = mission1;
       mission1 = mission;
+      Serial.println(tau_roll+90);
       rudder.write(tau_roll+90);
       elevator.write(tau_pitch+90);
     }
@@ -212,6 +245,29 @@ void loop() {
         }
       }
   }
+  // Forward from BLEUART to Serial
+  if ( bleuart.available() )
+  {
+    uint8_t ch;
+    ch = (uint8_t) bleuart.read();
+    Serial.write(ch);
+  }
+}
+
+void setupAdv(void)
+{
+  Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
+  //Bluefruit.Advertising.addTxPower();
+
+  // Include bleuart 128-bit uuid
+  Bluefruit.Advertising.addService(bleuart);
+
+  // There is no room for Name in Advertising packet
+  // Use Scan response for Name
+  Bluefruit.ScanResponse.addName();
+
+  Bluefruit.Advertising.setFastTimeout(0);
+  Bluefruit.Advertising.setIntervalMS(100,100);
 }
 
 float echo(){
