@@ -43,6 +43,8 @@ BLEUart bleuart;
 enum BLEState {BLE_OFF, BLE_STARTING, BLE_RUNNING, BLE_STOPPING};
 enum BLEState BLE_MODE = BLE_OFF;
 
+int test_var = 0;
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(15,OUTPUT);
@@ -61,12 +63,16 @@ void setup() {
   elevator.attach(A3);
   pinMode(11, OUTPUT); //trigger_pin
   pinMode(7, INPUT); //echo_pin
+  Serial.println("Setup almost done.\n");
   
   digitalWrite(PIN_LED2,LOW);
 
-  //start_ble();
+  test_var = 0;
+
+  start_ble();
   //stop_ble();
   //start_ble();
+  //Serial.println("Setup done.\n");
 }
 
 void loop() {
@@ -74,6 +80,17 @@ void loop() {
   int dat[25];
   int d = sbus.read();
   int index = 0;
+  if (test_var == 0){
+    if (bleuart.available()){
+      test_var = (uint8_t) bleuart.read();
+      Serial.print("BLE: ");
+      Serial.println(test_var);
+      stop_ble();
+      start_ble();
+    }
+  }
+  Serial.print("VAL: ");
+  Serial.println(test_var);
   while(d != -1){
     if(index < 25) dat[index] = d;
     index ++;
@@ -238,7 +255,7 @@ void loop() {
           mtemp2 = mtemp1;
           mtemp1 = mtemp;
         }
-      }
+    }
   }
 }
 
@@ -305,6 +322,7 @@ void startAdv(void)
 void start_ble(){
   Bluefruit.begin();
   Bluefruit.setName("Artemis"); 
+  Bluefruit.setTxPower(4);
   bleuart.begin(); 
   startAdv();
 }
@@ -312,6 +330,7 @@ void start_ble(){
 void stop_ble(){
   //softdevice_handler_sd_disable();
   sd_softdevice_disable();
+  //sd_softdevice_enable();
 }
 
 void ble(){
