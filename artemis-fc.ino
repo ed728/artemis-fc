@@ -2,6 +2,8 @@
 #include "SoftwareSerial.h"
 #include <Servo.h>
 
+#define BLE_TUNING 1
+
 MPU9250 mpu;
 SoftwareSerial sbus = SoftwareSerial(A0, A5, true);
 Servo motor;
@@ -34,6 +36,16 @@ enum Missions mission1 = NONE;
 enum Missions mission2 = NONE;
 bool turn_no1 = true;
 
+#if BLE_TUNING
+#include <bluefruit.h>
+BLEUart bleuart;
+
+float ble_var = 0;
+char ble_data[16];
+uint8_t ble_idx = 0;
+bool ble_read = true;
+#endif
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(15,OUTPUT);
@@ -54,6 +66,11 @@ void setup() {
   pinMode(7, INPUT); //echo_pin
   
   digitalWrite(PIN_LED2,LOW);
+  
+  #if BLE_TUNING
+    ble_var = 0;
+    start_ble();
+  #endif BLE_TUNING
 }
 
 void loop() {
@@ -61,6 +78,23 @@ void loop() {
   int dat[25];
   int d = sbus.read();
   int index = 0;
+  
+#if BLE_TUNING
+  if (ble_read){
+    if (bleuart.available()){
+      while (bleuart.available()){
+        ble_data[ble_idx] = (char) bleuart.read();
+        ++ble_idx;
+      }
+      ble_var = String(ble_data).toFloat();
+      //sd_power_gpregret_clr(0, 0xFF);
+      sd_softdevice_disable();
+      Bluefruit.begin();
+      ble_read = false;
+    }
+  }
+#endif BLE_TUNING
+
   while(d != -1){
     if(index < 25) dat[index] = d;
     index ++;
@@ -224,7 +258,7 @@ void loop() {
           mtemp2 = mtemp1;
           mtemp1 = mtemp;
         }
-      }
+    }
   }
 }
 
@@ -259,3 +293,40 @@ int P2control(int current_theta, int target_theta,int current_omega, int target_
   int error_omega = current_omega - target_omega;
   return P_theta*error_theta+P_omega*error_omega;
 }
+#if BLE_TUNING
+void startAdv(void)
+{
+  // Advertising packet
+  Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
+  Bluefruit.Advertising.addTxPower();
+  
+  // Include the BLE UART (AKA 'NUS') 128-bit UUID
+  Bluefruit.Advertising.addService(bleuart);
+ 
+  // Secondary Scan Response packet (optional)
+  // Since there is no room for 'Name' in Advertising packet
+  Bluefruit.ScanResponse.addName();
+ 
+  /* Start Advertising
+   * - Enable auto advertising if disconnected
+   * - Interval:  fast mode = 20 ms, slow mode = 152.5 ms
+   * - Timeout for fast mode is 30 seconds
+   * - Start(timeout) with timeout = 0 will advertise forever (until connected)
+   * 
+   * For recommended advertising interval
+   * https://developer.apple.com/library/content/qa/qa1931/_index.html   
+   */
+  Bluefruit.Advertising.restartOnDisconnect(true);
+  Bluefruit.Advertising.setInterval(32, 244);    // in unit of 0.625 ms
+  Bluefruit.Advertising.setFastTimeout(30);      // number of seconds in fast mode
+  Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising after n seconds  
+}
+
+void start_ble(){
+  Bluefruit.begin();
+  Bluefruit.setName("Artemis"); 
+  Bluefruit.setTxPower(4);
+  bleuart.begin(); 
+  startAdv();
+}
+#endif BLE_TUNING
