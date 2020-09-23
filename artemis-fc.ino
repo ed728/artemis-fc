@@ -5,7 +5,7 @@
 #include "SoftwareSerial.h"
 #include <Servo.h>
 
-#include <bluefruit.h>
+#define BLE_TUNING 1
 
 MPU9250 mpu;
 SoftwareSerial sbus = SoftwareSerial(A0, A5, true);
@@ -39,11 +39,15 @@ enum Missions mission1 = NONE;
 enum Missions mission2 = NONE;
 bool turn_no1 = true;
 
+#if BLE_TUNING
+#include <bluefruit.h>
 BLEUart bleuart;
-enum BLEState {BLE_OFF, BLE_STARTING, BLE_RUNNING, BLE_STOPPING};
-enum BLEState BLE_MODE = BLE_OFF;
 
-int test_var = 0;
+float ble_var = 0;
+char ble_data[16];
+uint8_t ble_idx = 0;
+bool ble_read = true;
+#endif
 
 void setup() {
   // put your setup code here, to run once:
@@ -63,16 +67,13 @@ void setup() {
   elevator.attach(A3);
   pinMode(11, OUTPUT); //trigger_pin
   pinMode(7, INPUT); //echo_pin
-  Serial.println("Setup almost done.\n");
   
   digitalWrite(PIN_LED2,LOW);
 
-  test_var = 0;
-
+#if BLE_TUNING
+  ble_var = 0;
   start_ble();
-  //stop_ble();
-  //start_ble();
-  //Serial.println("Setup done.\n");
+#endif BLE_TUNING
 }
 
 void loop() {
@@ -80,17 +81,23 @@ void loop() {
   int dat[25];
   int d = sbus.read();
   int index = 0;
-  if (test_var == 0){
+  
+#if BLE_TUNING
+  if (ble_read){
     if (bleuart.available()){
-      test_var = (uint8_t) bleuart.read();
-      Serial.print("BLE: ");
-      Serial.println(test_var);
-      stop_ble();
-      start_ble();
+      while (bleuart.available()){
+        ble_data[ble_idx] = (char) bleuart.read();
+        ++ble_idx;
+      }
+      ble_var = String(ble_data).toFloat();
+      //sd_power_gpregret_clr(0, 0xFF);
+      sd_softdevice_disable();
+      Bluefruit.begin();
+      ble_read = false;
     }
   }
-  Serial.print("VAL: ");
-  Serial.println(test_var);
+#endif BLE_TUNING
+
   while(d != -1){
     if(index < 25) dat[index] = d;
     index ++;
@@ -290,7 +297,7 @@ int P2control(int current_theta, int target_theta,int current_omega, int target_
   int error_omega = current_omega - target_omega;
   return P_theta*error_theta+P_omega*error_omega;
 }
-
+#if BLE_TUNING
 void startAdv(void)
 {
   // Advertising packet
@@ -326,27 +333,4 @@ void start_ble(){
   bleuart.begin(); 
   startAdv();
 }
-
-void stop_ble(){
-  //softdevice_handler_sd_disable();
-  sd_softdevice_disable();
-  //sd_softdevice_enable();
-}
-
-void ble(){
-	switch(BLE_MODE){
-	  case BLE_OFF:
-      break;
-    case BLE_STARTING:
-      start_ble();
-      BLE_MODE = BLE_RUNNING;
-      break;
-    case BLE_RUNNING:
-      //process_ble();
-      break;
-    case BLE_STOPPING:
-      stop_ble();
-      BLE_MODE =  BLE_OFF;
-      break;
-	}
-}
+#endif BLE_TUNING
