@@ -35,6 +35,8 @@ enum Missions {TURN, EIGHT_TURN, AUTO_TO, CLIMB_TURN, NONE};
 enum Missions mission1 = NONE;
 enum Missions mission2 = NONE;
 bool turn_no1 = true;
+float pitchZero = 0;
+float rollZero = 0;
 
 #if BLE_TUNING
 #include <bluefruit.h>
@@ -59,6 +61,19 @@ void setup() {
   mpu.setup();
   delay(5000);
   //mpu.calibrateAccelGyro();
+  float pitchSum = 0;
+  float rollSum = 0;
+  float previous = 0;
+  for(int i = 0;i < 3000; i++){
+    mpu.update();
+  }
+  for(int i = 0; i < 100; i++){
+    mpu.update();
+    pitchSum += mpu.getPitch();
+    rollSum += mpu.getRoll();
+  }
+  pitchZero = pitchSum / 100;
+  rollZero = rollSum/100;
   motor.attach(A1);
   rudder.attach(A2);
   elevator.attach(A3);
@@ -87,9 +102,11 @@ void loop() {
         ++ble_idx;
       }
       ble_var = String(ble_data).toFloat();
+      Serial.print("VAL:");
+      Serial.println(ble_var);
       //sd_power_gpregret_clr(0, 0xFF);
       sd_softdevice_disable();
-      Bluefruit.begin();
+      //Bluefruit.begin();
       ble_read = false;
     }
   }
@@ -103,6 +120,7 @@ void loop() {
   if(dat[0] == 240 && dat[8] > 0){
     if(dat[9] & 0x02 > 0){ //自動操縦モード
       mpu.update();
+      Serial.println(mpu.getPitch());
       digitalWrite(15,HIGH);
       int tau_roll;
       int tau_pitch;
@@ -126,8 +144,8 @@ void loop() {
       switch (mode(mission,mission1,mission2)){
         case TURN:
         {
-          tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,-2,0,0);
-          tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
+          tau_roll = PIDcontrol(mpu.getRoll(),rollZero,10,&roll_before,-2,0,0);//ble_var = -2
+          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
           break;
         }
         case EIGHT_TURN:
@@ -139,28 +157,29 @@ void loop() {
           case BEFORE_START:
           {
             eight_state = STARTED;
+            
             eight_start_yaw = mpu.getYaw();
             turn_no1 = true;
             break;
           }
           case STARTED:
           {
-            tau_roll = PIDcontrol(mpu.getRoll(),30,&roll_before,-2,0,0);
-            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
+            tau_roll = PIDcontrol(mpu.getRoll(),rollZero,30,&roll_before,-2,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
             if(-5 > remain || remain > 5) eight_state = FIRST_TURN;
             break;
           }
           case FIRST_TURN:
           {
-            tau_roll = PIDcontrol(mpu.getRoll(),30,&roll_before,-2,0,0);
-            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
+            tau_roll = PIDcontrol(mpu.getRoll(),rollZero,30,&roll_before,-2,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
             if(-5 < remain && remain < 5) eight_state = SECOND_TURN;
             break;
           }
           case SECOND_TURN:
           {
-            tau_roll = PIDcontrol(mpu.getRoll(),-30,&roll_before,-2,0,0);
-            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
+            tau_roll = PIDcontrol(mpu.getRoll(),rollZero,-30,&roll_before,-2,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
             break;
           }
           default:
@@ -171,13 +190,13 @@ void loop() {
         case AUTO_TO:
         {
           motor.write(180);
-          tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,-2,0,0);
-          tau_pitch = PIDcontrol(mpu.getPitch(),10,&pitch_before,3.5,0,0);
+          tau_roll = PIDcontrol(mpu.getRoll(),rollZero,0,&roll_before,-2,0,0);
+          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,10,&pitch_before,3.5,0,0);
           break;
         }
         case CLIMB_TURN:
         {
-          tau_roll = PIDcontrol(mpu.getRoll(),-30,&roll_before,-2,0,0);
+          tau_roll = PIDcontrol(mpu.getRoll(),rollZero,-30,&roll_before,-2,0,0);
           float remain = mpu.getYaw() - climb_start_yaw;
           Serial.println(climb_state);
           switch (climb_state)
@@ -191,13 +210,13 @@ void loop() {
           }
           case STARTED:
           {
-            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
             if(-5 > remain || remain > 5) climb_state = FIRST_TURN;
             break;
           }
           case FIRST_TURN:
           {
-            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
             if(-5 < remain && remain < 5) {
               if(turn_no1){
                 turn_no1 = false;
@@ -211,13 +230,13 @@ void loop() {
           case CLIMB:
           {
             turn_no1 = true;
-            tau_pitch = PIDcontrol(mpu.getPitch(),-30,&pitch_before,3.5,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,-30,&pitch_before,3.5,0,0);
             if(echo() > climb_start_alt + 200) climb_state = SECOND_TURN;
             break;
           }
           case SECOND_TURN:
           {
-            tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
             break;
           }
           default:
@@ -227,8 +246,8 @@ void loop() {
         }
         default:
         {
-          tau_roll = PIDcontrol(mpu.getRoll(),0,&roll_before,-2,0,0);
-          tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
+          tau_roll = PIDcontrol(mpu.getRoll(),rollZero,0,&roll_before,-2,0,0);
+          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
           break;
         }
       }
@@ -242,22 +261,23 @@ void loop() {
       eight_state = BEFORE_START;
       climb_state = BEFORE_START;
       if(index > 10){
-          int rtemp = 180-((float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1)-192)/1600*180);
-          rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
-          rtemp2 = rtemp1;
-          rtemp1 = rtemp;
-          
-          int etemp = 180-(float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3)-192)/1600*180;
-          elevator.write((int)(etemp + etemp1 + etemp2)/3);
-          etemp2 = etemp1;
-          etemp1 = etemp;
-  
-          int mtemp = 180-((float)(((dat[5] & 0x01) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6)-192)/1600*180);
-          motor.write(mode(mtemp,mtemp1,mtemp2));
-          Serial.println(mode(mtemp,mtemp1,mtemp2));
+        int rtemp = 180-((float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1)-192)/1600*180);
+        rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
+        rtemp2 = rtemp1;
+        rtemp1 = rtemp;
+        
+        int etemp = 180-(float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3)-192)/1600*180;
+        elevator.write((int)(etemp + etemp1 + etemp2)/3);
+        etemp2 = etemp1;
+        etemp1 = etemp;
+
+        int mtemp = 180-((float)(((dat[5] & 0x01) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6)-192)/1600*180);
+        if(mtemp - 100 < mtemp1){
+          motor.write(mtemp);
           mtemp2 = mtemp1;
           mtemp1 = mtemp;
         }
+      }
     }
   }
 }
@@ -281,17 +301,13 @@ int mode(int a, int b, int c){
   return true_state;
 }
 
-int PIDcontrol(float current, int target, int *before, float P, float I, float D){
+int PIDcontrol(float current, float zero, int target, int *before, float P, float I, float D){
+  current -= zero;
   float error = current - target;
   //sum += error;
   int dif = error-*before;
   *before = error;
-  return P*error+D*dif; //+I*sum
-}
-int P2control(int current_theta, int target_theta,int current_omega, int target_omega, int P_theta, int P_omega){
-  int error_theta = current_theta - target_theta;
-  int error_omega = current_omega - target_omega;
-  return P_theta*error_theta+P_omega*error_omega;
+  return P*error+D*dif + zero; //+I*sum
 }
 #if BLE_TUNING
 void startAdv(void)
