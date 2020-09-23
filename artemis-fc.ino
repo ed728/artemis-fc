@@ -1,6 +1,3 @@
-#include "Arduino.h"
-//#include <components/softdevice/common/softdevice_handler.h>
-
 #include "MPU9250.h"
 #include "SoftwareSerial.h"
 #include <Servo.h>
@@ -69,11 +66,11 @@ void setup() {
   pinMode(7, INPUT); //echo_pin
   
   digitalWrite(PIN_LED2,LOW);
-
-#if BLE_TUNING
-  ble_var = 0;
-  start_ble();
-#endif BLE_TUNING
+  
+  #if BLE_TUNING
+    ble_var = 0;
+    start_ble();
+  #endif BLE_TUNING
 }
 
 void loop() {
@@ -129,7 +126,7 @@ void loop() {
       switch (mode(mission,mission1,mission2)){
         case TURN:
         {
-          tau_roll = PIDcontrol(mpu.getRoll(),30,&roll_before,-2,0,0);
+          tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,-2,0,0);
           tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
           break;
         }
@@ -241,24 +238,23 @@ void loop() {
       elevator.write(tau_pitch+90);
     }
     else{ //手動操縦モード
-      //if (true){}
-      //else{
-        digitalWrite(15,LOW);
-        eight_state = BEFORE_START;
-        climb_state = BEFORE_START;
-        if(index > 10){
-            int rtemp = 180-((float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1)-192)/1600*180);
-            rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
-            rtemp2 = rtemp1;
-            rtemp1 = rtemp;
+      digitalWrite(15,LOW);
+      eight_state = BEFORE_START;
+      climb_state = BEFORE_START;
+      if(index > 10){
+          int rtemp = 180-((float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1)-192)/1600*180);
+          rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
+          rtemp2 = rtemp1;
+          rtemp1 = rtemp;
           
-            int etemp = 180-(float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3)-192)/1600*180;
-            elevator.write((int)(etemp + etemp1 + etemp2)/3);
-        	  etemp2 = etemp1;
-  	        etemp1 = etemp;
+          int etemp = 180-(float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3)-192)/1600*180;
+          elevator.write((int)(etemp + etemp1 + etemp2)/3);
+          etemp2 = etemp1;
+          etemp1 = etemp;
   
           int mtemp = 180-((float)(((dat[5] & 0x01) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6)-192)/1600*180);
           motor.write(mode(mtemp,mtemp1,mtemp2));
+          Serial.println(mode(mtemp,mtemp1,mtemp2));
           mtemp2 = mtemp1;
           mtemp1 = mtemp;
         }
