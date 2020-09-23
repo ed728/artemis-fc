@@ -1,11 +1,6 @@
-#include "Arduino.h"
-//#include <components/softdevice/common/softdevice_handler.h>
-
 #include "MPU9250.h"
 #include "SoftwareSerial.h"
 #include <Servo.h>
-
-#include <bluefruit.h>
 
 MPU9250 mpu;
 SoftwareSerial sbus = SoftwareSerial(A0, A5, true);
@@ -39,10 +34,6 @@ enum Missions mission1 = NONE;
 enum Missions mission2 = NONE;
 bool turn_no1 = true;
 
-BLEUart bleuart;
-enum BLEState {BLE_OFF, BLE_STARTING, BLE_RUNNING, BLE_STOPPING};
-enum BLEState BLE_MODE = BLE_OFF;
-
 void setup() {
   // put your setup code here, to run once:
   pinMode(15,OUTPUT);
@@ -63,10 +54,6 @@ void setup() {
   pinMode(7, INPUT); //echo_pin
   
   digitalWrite(PIN_LED2,LOW);
-
-  //start_ble();
-  //stop_ble();
-  //start_ble();
 }
 
 void loop() {
@@ -105,7 +92,7 @@ void loop() {
       switch (mode(mission,mission1,mission2)){
         case TURN:
         {
-          tau_roll = PIDcontrol(mpu.getRoll(),30,&roll_before,-2,0,0);
+          tau_roll = PIDcontrol(mpu.getRoll(),15,&roll_before,-2,0,0);
           tau_pitch = PIDcontrol(mpu.getPitch(),0,&pitch_before,3.5,0,0);
           break;
         }
@@ -217,24 +204,23 @@ void loop() {
       elevator.write(tau_pitch+90);
     }
     else{ //手動操縦モード
-      //if (true){}
-      //else{
-        digitalWrite(15,LOW);
-        eight_state = BEFORE_START;
-        climb_state = BEFORE_START;
-        if(index > 10){
-            int rtemp = 180-((float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1)-192)/1600*180);
-            rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
-            rtemp2 = rtemp1;
-            rtemp1 = rtemp;
+      digitalWrite(15,LOW);
+      eight_state = BEFORE_START;
+      climb_state = BEFORE_START;
+      if(index > 10){
+          int rtemp = 180-((float)(((dat[6] & 0x0F) << 7)+((dat[5] & 0xFE) >> 1)-192)/1600*180);
+          rudder.write((int)(rtemp + rtemp1 + rtemp2)/3);
+          rtemp2 = rtemp1;
+          rtemp1 = rtemp;
           
-            int etemp = 180-(float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3)-192)/1600*180;
-            elevator.write((int)(etemp + etemp1 + etemp2)/3);
-        	  etemp2 = etemp1;
-  	        etemp1 = etemp;
+          int etemp = 180-(float)(((dat[3] & 0x3F) << 5)+((dat[2] & 0xF8) >> 3)-192)/1600*180;
+          elevator.write((int)(etemp + etemp1 + etemp2)/3);
+          etemp2 = etemp1;
+          etemp1 = etemp;
   
           int mtemp = 180-((float)(((dat[5] & 0x01) << 10)+((dat[4] & 0xFF) << 2)+((dat[3] & 0xC0) >> 6)-192)/1600*180);
           motor.write(mode(mtemp,mtemp1,mtemp2));
+          Serial.println(mode(mtemp,mtemp1,mtemp2));
           mtemp2 = mtemp1;
           mtemp1 = mtemp;
         }
@@ -272,62 +258,4 @@ int P2control(int current_theta, int target_theta,int current_omega, int target_
   int error_theta = current_theta - target_theta;
   int error_omega = current_omega - target_omega;
   return P_theta*error_theta+P_omega*error_omega;
-}
-
-void startAdv(void)
-{
-  // Advertising packet
-  Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
-  Bluefruit.Advertising.addTxPower();
-  
-  // Include the BLE UART (AKA 'NUS') 128-bit UUID
-  Bluefruit.Advertising.addService(bleuart);
- 
-  // Secondary Scan Response packet (optional)
-  // Since there is no room for 'Name' in Advertising packet
-  Bluefruit.ScanResponse.addName();
- 
-  /* Start Advertising
-   * - Enable auto advertising if disconnected
-   * - Interval:  fast mode = 20 ms, slow mode = 152.5 ms
-   * - Timeout for fast mode is 30 seconds
-   * - Start(timeout) with timeout = 0 will advertise forever (until connected)
-   * 
-   * For recommended advertising interval
-   * https://developer.apple.com/library/content/qa/qa1931/_index.html   
-   */
-  Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(32, 244);    // in unit of 0.625 ms
-  Bluefruit.Advertising.setFastTimeout(30);      // number of seconds in fast mode
-  Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising after n seconds  
-}
-
-void start_ble(){
-  Bluefruit.begin();
-  Bluefruit.setName("Artemis"); 
-  bleuart.begin(); 
-  startAdv();
-}
-
-void stop_ble(){
-  //softdevice_handler_sd_disable();
-  sd_softdevice_disable();
-}
-
-void ble(){
-	switch(BLE_MODE){
-	  case BLE_OFF:
-      break;
-    case BLE_STARTING:
-      start_ble();
-      BLE_MODE = BLE_RUNNING;
-      break;
-    case BLE_RUNNING:
-      //process_ble();
-      break;
-    case BLE_STOPPING:
-      stop_ble();
-      BLE_MODE =  BLE_OFF;
-      break;
-	}
 }
