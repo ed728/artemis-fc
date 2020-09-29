@@ -24,4 +24,5 @@ void loop()
 {
   mpu.update();
   Serial.println(mpu.getPitch());
+  delay(50);
 }

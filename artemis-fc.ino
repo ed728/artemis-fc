@@ -2,7 +2,7 @@
 #include "SoftwareSerial.h"
 #include <Servo.h>
 
-#define BLE_TUNING 1
+#define BLE_TUNING 0
 
 MPU9250 mpu;
 SoftwareSerial sbus = SoftwareSerial(A0, A5, true);
@@ -39,7 +39,7 @@ float pitchZero = 0;
 float rollZero = 0;
 
 #if BLE_TUNING
-#include <bluefruit.h>
+//#include <bluefruit.h>
 BLEUart bleuart;
 
 float ble_var = 0;
@@ -53,7 +53,6 @@ void setup() {
   pinMode(15,OUTPUT);
   pinMode(PIN_LED2,OUTPUT);
   digitalWrite(PIN_LED2,HIGH);
-
   sbus.begin(100000);
   Serial.begin(115200);
   Wire.begin();
@@ -82,10 +81,10 @@ void setup() {
   
   digitalWrite(PIN_LED2,LOW);
   
-  #if BLE_TUNING
+#if BLE_TUNING
     ble_var = 0;
-    start_ble();
-  #endif BLE_TUNING
+    //start_ble();
+#endif
 }
 
 void loop() {
@@ -93,6 +92,8 @@ void loop() {
   int dat[25];
   int d = sbus.read();
   int index = 0;
+  mpu.update();
+  Serial.println(mpu.getPitch());
   
 #if BLE_TUNING
   if (ble_read){
@@ -110,7 +111,7 @@ void loop() {
       ble_read = false;
     }
   }
-#endif BLE_TUNING
+#endif
 
   while(d != -1){
     if(index < 25) dat[index] = d;
@@ -119,8 +120,6 @@ void loop() {
   }
   if(dat[0] == 240 && dat[8] > 0){
     if(dat[9] & 0x02 > 0){ //自動操縦モード
-      mpu.update();
-      Serial.println(mpu.getPitch());
       digitalWrite(15,HIGH);
       int tau_roll;
       int tau_pitch;
@@ -131,7 +130,7 @@ void loop() {
       else if(dat[11] > 220) { //CH8（8の字飛行）
         mission = EIGHT_TURN;
       }
-      else if(false){ //CH9（自動離陸）
+      else if(dat[13] & 0x04){ //CH9（自動離陸）
         mission = AUTO_TO;
       }
       else if(dat[14]&0x20 > 0){ //CH10（上昇旋回）
@@ -145,7 +144,7 @@ void loop() {
         case TURN:
         {
           tau_roll = PIDcontrol(mpu.getRoll(),rollZero,10,&roll_before,-2,0,0);//ble_var = -2
-          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
+          tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,-1,&pitch_before,3.5,0,0);
           break;
         }
         case EIGHT_TURN:
@@ -164,22 +163,22 @@ void loop() {
           }
           case STARTED:
           {
-            tau_roll = PIDcontrol(mpu.getRoll(),rollZero,30,&roll_before,-2,0,0);
-            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
+            tau_roll = PIDcontrol(mpu.getRoll(),rollZero,10,&roll_before,-2,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,-1,&pitch_before,3.5,0,0);
             if(-5 > remain || remain > 5) eight_state = FIRST_TURN;
             break;
           }
           case FIRST_TURN:
           {
-            tau_roll = PIDcontrol(mpu.getRoll(),rollZero,30,&roll_before,-2,0,0);
-            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
+            tau_roll = PIDcontrol(mpu.getRoll(),rollZero,10,&roll_before,-2,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,-1,&pitch_before,3.5,0,0);
             if(-5 < remain && remain < 5) eight_state = SECOND_TURN;
             break;
           }
           case SECOND_TURN:
           {
-            tau_roll = PIDcontrol(mpu.getRoll(),rollZero,-30,&roll_before,-2,0,0);
-            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,0,&pitch_before,3.5,0,0);
+            tau_roll = PIDcontrol(mpu.getRoll(),rollZero,-10,&roll_before,-2,0,0);
+            tau_pitch = PIDcontrol(mpu.getPitch(),pitchZero,-1,&pitch_before,3.5,0,0);
             break;
           }
           default:
@@ -345,4 +344,4 @@ void start_ble(){
   bleuart.begin(); 
   startAdv();
 }
-#endif BLE_TUNING
+#endif
